@@ -199,7 +199,7 @@ function refreshLogs() {
                 return;
             }
             container.innerHTML = files.map(f =>
-                `<a href="/api/log/${encodeURIComponent(f)}" target="_blank" class="block hover:text-amber-400">${f}</a>`
+                `<a href="/api/download?file=${encodeURIComponent(f)}" target="_blank" class="block hover:text-amber-400">${f}</a>`
             ).join('');
         })
         .catch(() => {

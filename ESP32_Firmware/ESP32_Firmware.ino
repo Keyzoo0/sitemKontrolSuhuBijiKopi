@@ -1244,9 +1244,13 @@ void setupWebServer() {
     request->send(200, "application/json", json);
   });
 
-  // API: GET /api/log/{filename} — download CSV
-  server.on("/api/log/", HTTP_GET, [](AsyncWebServerRequest* request) {
-    String filename = "/" + request->pathArg(0);
+  // API: GET /api/download — download CSV (?file=log_fuzzy_001.csv)
+  server.on("/api/download", HTTP_GET, [](AsyncWebServerRequest* request) {
+    if (!request->hasParam("file")) {
+      request->send(400, "application/json", "{\"status\":\"error\",\"msg\":\"missing file param\"}");
+      return;
+    }
+    String filename = "/" + request->getParam("file")->value();
     if (!SD.exists(filename)) {
       request->send(404, "text/plain", "File not found");
       return;
