@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blower Control - Dashboard</title>
+    <title>Kopi Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
     <nav class="bg-gray-800 border-b border-gray-700 px-4 py-3">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold text-amber-400">Blower Control v19+WS</h1>
+            <h1 class="text-xl font-bold text-amber-400">Kopi Control v19+WS</h1>
             <div class="flex items-center gap-4">
                 <span id="connectionStatus" class="px-3 py-1 rounded text-sm bg-red-600">Disconnected</span>
                 <span id="modeBadge" class="px-3 py-1 rounded text-sm bg-gray-600">NONE</span>
@@ -20,20 +20,19 @@
     </nav>
 
     <main class="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <!-- Kartu Statistik -->
         <div class="lg:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="stat-card">
                 <div class="stat-label">Temperature</div>
-                <div class="stat-value" id="tempValue">0.00<span class="text-lg">°C</span></div>
+                <div class="stat-value" id="tempValue">0.0<span class="text-lg">°C</span></div>
                 <div class="stat-detail" id="tempDetail">SP: 60.0°C</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Blower</div>
                 <div class="stat-value" id="blowerValue">0%</div>
-                <div class="stat-detail" id="blowerDetail">Dimmer Output</div>
+                <div class="stat-detail" id="blowerDetail">Dimmer</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">RPM Dryer</div>
+                <div class="stat-label">RPM</div>
                 <div class="stat-value" id="rpmValue">0.0</div>
                 <div class="stat-detail" id="rpmDetail">Status: --</div>
             </div>
@@ -44,62 +43,61 @@
             </div>
         </div>
 
-        <!-- Chart -->
         <div class="lg:col-span-3 bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold">Real-time Temperature</h2>
-                <div class="flex gap-2">
-                    <span class="flex items-center gap-1 text-sm"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Temp</span>
-                    <span class="flex items-center gap-1 text-sm"><span class="w-3 h-3 rounded-full bg-red-500"></span> Setpoint</span>
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-sm font-semibold text-gray-300">Real-time Temperature</h2>
+                <div class="flex gap-3 text-xs">
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 rounded bg-yellow-400"></span> Temp</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 rounded bg-red-500 dashed"></span> Setpoint</span>
                 </div>
             </div>
-            <canvas id="tempChart" height="250"></canvas>
+            <div style="height:200px">
+                <canvas id="tempChart"></canvas>
+            </div>
         </div>
 
-        <!-- Control Panel -->
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <h2 class="text-lg font-semibold mb-3">Controls</h2>
-            <div class="space-y-4">
+            <h2 class="text-sm font-semibold text-gray-300 mb-3">Controls</h2>
+            <div class="space-y-3">
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Setpoint (°C)</label>
-                    <div class="flex gap-2">
+                    <label class="block text-xs text-gray-400 mb-1">Setpoint (°C)</label>
+                    <div class="flex gap-1">
                         <input type="number" id="spInput" value="60" min="30" max="120" step="0.5"
-                               class="bg-gray-700 text-white px-3 py-2 rounded w-full border border-gray-600 focus:border-amber-400 focus:outline-none">
-                        <button onclick="setSetpoint()" class="bg-amber-500 hover:bg-amber-600 text-black px-4 py-2 rounded font-semibold">Set</button>
+                               class="bg-gray-700 text-white px-2 py-1.5 rounded w-full text-sm border border-gray-600 focus:border-amber-400 focus:outline-none">
+                        <button onclick="setSetpoint()" class="bg-amber-500 hover:bg-amber-600 text-black px-3 py-1.5 rounded text-sm font-semibold">Set</button>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Servo Angle (°)</label>
-                    <div class="flex gap-2">
+                    <label class="block text-xs text-gray-400 mb-1">Servo (°)</label>
+                    <div class="flex gap-1">
                         <input type="number" id="servoInput" value="180" min="0" max="180"
-                               class="bg-gray-700 text-white px-3 py-2 rounded w-full border border-gray-600 focus:border-amber-400 focus:outline-none">
-                        <button onclick="setServo()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-semibold">Set</button>
+                               class="bg-gray-700 text-white px-2 py-1.5 rounded w-full text-sm border border-gray-600 focus:border-amber-400 focus:outline-none">
+                        <button onclick="setServo()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-semibold">Set</button>
                     </div>
                 </div>
                 <hr class="border-gray-700">
-                <button onclick="toggleMode()" id="modeBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-semibold">Start Fuzzy Mode</button>
-                <button onclick="stopSystem()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded font-semibold">EMERGENCY STOP</button>
+                <button onclick="toggleMode()" id="modeBtn" class="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded text-sm font-semibold">Start Fuzzy Mode</button>
+                <button onclick="stopSystem()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded text-sm font-semibold">EMERGENCY STOP</button>
                 <hr class="border-gray-700">
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">PID Info</label>
-                    <div id="pidInfo" class="text-xs text-gray-400 space-y-1 font-mono">
-                        <div>Kp: 0.60 | Ki: 0.08 | Kd: 0.50</div>
-                        <div id="pidValues">u: 0.000 | Int: 0.00 | D: 0.00</div>
-                        <div id="fisValues">FIS: 0.0%</div>
-                    </div>
+                <div class="text-xs text-gray-400 font-mono space-y-0.5">
+                    <div id="pidValues">u: 0.000  I: 0.00  D: 0.00</div>
+                    <div id="fisValues">FIS: 0.0%</div>
                 </div>
             </div>
         </div>
 
-        <!-- Logs -->
-        <div class="lg:col-span-4 bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold">SD Card Logs</h2>
-                <button onclick="refreshLogs()" class="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">Refresh</button>
+        <div class="lg:col-span-4 bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-sm font-semibold text-gray-300">SD Logs</span>
+                <button onclick="refreshLogs()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded">Refresh</button>
             </div>
-            <div id="logList" class="text-sm text-gray-400 max-h-24 overflow-y-auto"></div>
+            <div id="logList" class="text-xs text-gray-400 max-h-20 overflow-y-auto"></div>
         </div>
     </main>
+
+    <style>
+        .dashed { border-top: 2px dashed #ef4444; height: 0; width: 12px; display: inline-block; }
+    </style>
 
     <script src="app.js"></script>
 </body>

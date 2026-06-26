@@ -381,8 +381,6 @@ static void lcdLine(int row, const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-  for (int i = strlen(buf); i < 20; i++) buf[i] = ' ';
-  buf[20] = '\0';
   lcd.setCursor(0, row);
   lcd.print(buf);
 }
@@ -1184,8 +1182,10 @@ void handleWebSocketMessage(void* arg, uint8_t* data, size_t len) {
     if (!doc["mode"].isNull()) {
       String mode = doc["mode"].as<String>();
       if (mode == "FUZZY") {
-        preFuzzyServoInput = "";
-        appState = STATE_SERVO_PREFUZZY;
+        runMode = MODE_FUZZY;
+        appState = STATE_MONITOR;
+        motorStartTime = millis();
+        rpmStatus = RPM_STARTUP;
       } else if (mode == "MANUAL") {
         runMode = MODE_MANUAL;
         appState = STATE_MONITOR;
