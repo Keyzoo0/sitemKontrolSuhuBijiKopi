@@ -69,6 +69,7 @@
 //  [WS-7] Data logging CSV download dari SD card
 // =============================================================================
 
+#include <stdarg.h>
 #include "RTClib.h"
 RTC_DS3231 rtc;
 
@@ -374,19 +375,29 @@ char getSingleKey() {
   return 'N';
 }
 
+static void lcdLine(int row, const char* fmt, ...) {
+  char buf[21];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+  lcd.setCursor(0, row);
+  lcd.print(buf);
+}
+
 // =============================================================================
 //  showScrollableMenu()
 // =============================================================================
 void showScrollableMenu(const char* title, const char* items[], int count, int& selectedIdx) {
+  static int prevSelected = -1;
+  if (selectedIdx == prevSelected) return;
+  prevSelected = selectedIdx;
   int scrollTop = constrain(selectedIdx - 1, 0, max(0, count - 3));
-  lcd.clear();
-  lcd.setCursor(0, 0); lcd.print(title);
+  lcdLine(0, "%-20.20s", title);
   for (int i = 0; i < 3; i++) {
     int idx = scrollTop + i;
     if (idx < count) {
-      lcd.setCursor(0, i + 1);
-      lcd.print(idx == selectedIdx ? "> " : "  ");
-      lcd.print(items[idx]);
+      lcdLine(i + 1, "%c %-17.17s", idx == selectedIdx ? '>' : ' ', items[idx]);
     }
   }
 }
@@ -447,14 +458,14 @@ void loadServoAngleFromNVS() {
 //  showServoPreFuzzy()
 // =============================================================================
 void showServoPreFuzzy() {
-  lcd.setCursor(0, 0); lcd.print("=== SET SERVO ===   ");
-  lcd.setCursor(0, 1);
-  lcd.print("Sudut: ");
-  lcd.print(posServoOperasi);
-  lcd.print(" deg        ");
-  lcd.setCursor(0, 2); lcd.print("Ketik+C=Set  D=OK   ");
-  lcd.setCursor(0, 3);
-  lcd.print("Input: " + preFuzzyServoInput + "         ");
+  static String lastInput = "";
+  if (lastInput != preFuzzyServoInput) {
+    lastInput = preFuzzyServoInput;
+    lcdLine(0, "=== SET SERVO ===   ");
+    lcdLine(1, "Sudut: %d deg", posServoOperasi);
+    lcdLine(2, "Ketik+C=Set  D=OK   ");
+    lcdLine(3, "Input: %-12.12s", preFuzzyServoInput.c_str());
+  }
 
   char key = getSingleKey();
 
@@ -469,25 +480,28 @@ void showServoPreFuzzy() {
       posServoOperasi   = newAngle;
       posServoFixed     = newAngle;
       preFuzzyServoInput = "";
+      lastInput = "";
       servo1.write(posServoFixed);
       delay(15);
       saveServoAngleToNVS();
       Serial.printf("[SERVO-PREFUZZY] Sudut dikonfirmasi: %d deg\n", posServoFixed);
-      lcd.clear();
-      lcd.setCursor(0, 0); lcd.print("Servo >>> ");
-      lcd.print(posServoFixed); lcd.print(" deg");
-      lcd.setCursor(0, 1); lcd.print("Bergerak...");
-      lcd.setCursor(0, 2); lcd.print("Tekan D utk lanjut  ");
-      lcd.setCursor(0, 3); lcd.print("ke mode FoPID+Fuzzy ");
+      lcdLine(0, "Servo >>> %d deg", posServoFixed);
+      lcdLine(1, "Bergerak...");
+      lcdLine(2, "Tekan D utk lanjut  ");
+      lcdLine(3, "ke mode FoPID+Fuzzy ");
     }
   } else if (key == 'D') {
     preFuzzyServoInput = "";
+    lastInput = "";
     servo1.write(posServoFixed);
     delay(15);
     Serial.printf("[SERVO-PREFUZZY] Konfirmasi akhir. Sudut=%d | Masuk MODE_FUZZY.\n", posServoFixed);
     runMode  = MODE_FUZZY;
     appState = STATE_MONITOR;
-    lcd.clear();
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
   }
 }
 
@@ -673,7 +687,6 @@ void selectRunMode() {
     } else {
       preFuzzyServoInput = "";
       appState = STATE_SERVO_PREFUZZY;
-      lcd.clear();
     }
   } else if (key == 'D') {
     appState = STATE_MAIN_MENU;
@@ -686,7 +699,6 @@ void showParamMenu() {
   if      (key == 'A' && paramMenuIdx > 0)               paramMenuIdx--;
   else if (key == 'B' && paramMenuIdx < paramMenuLen - 1) paramMenuIdx++;
   else if (key == 'C') {
-    lcd.clear();
     switch (paramMenuIdx) {
       case 0: appState = STATE_SET_MANUAL;   break;
       case 1: appState = STATE_SET_FUZZY;    break;
@@ -701,6 +713,16 @@ void showParamMenu() {
 
 void monitorView() {
   static int page = 0;
+  static int prevPage = -1;
+  static float prevTemp = -999;
+  static float prevRpm = -999;
+  static float prevPower = -999;
+  static int prevBlower = -999;
+  static float prevSP = -999;
+  static int prevServo = -999;
+  static long prevRemain = -999;
+  static int prevRpmStatus = -999;
+  static RunMode prevMode = MODE_NONE;
 
   if (isLogging) {
     unsigned long elapsedMs = millis() - startLoggingTime;
@@ -712,80 +734,112 @@ void monitorView() {
       servo1.write(posServoFixed);
       runMode = MODE_MANUAL;
       stopLogging();
-      lcd.clear();
-      lcd.setCursor(0, 0); lcd.print("** PERCOBAAN SELESAI");
-      lcd.setCursor(0, 1); lcd.print("Blower MATI         ");
-      lcd.setCursor(0, 2); lcd.print("File: "); lcd.print(logFileName);
-      lcd.setCursor(0, 3); lcd.print("Ambil SD card       ");
+      lcdLine(0, "** PERCOBAAN SELESAI");
+      lcdLine(1, "Blower MATI         ");
+      lcdLine(2, "File: %-13.13s", logFileName);
+      lcdLine(3, "Ambil SD card       ");
       delay(3000);
-      lcd.clear();
+      lcdLine(0, "%-20.20s", "");
+      lcdLine(1, "%-20.20s", "");
+      lcdLine(2, "%-20.20s", "");
+      lcdLine(3, "%-20.20s", "");
       page     = 0;
+      prevPage = -1;
       appState = STATE_MAIN_MENU;
       return;
     }
   }
 
-  lcd.clear();
+  char key = getSingleKey();
+  if (key == 'C') {
+    int maxPage = (runMode == MODE_FUZZY) ? 2 : 1;
+    page = (page < maxPage) ? page + 1 : 0;
+    prevPage = -1;
+  } else if (key == 'D') {
+    page     = 0;
+    prevPage = -1;
+    appState = STATE_MAIN_MENU;
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
+    return;
+  }
+
+  RunMode curMode = runMode;
+  bool modeChanged = (curMode != prevMode);
+  prevMode = curMode;
+
+  if (page != prevPage) {
+    prevPage = page;
+    prevTemp = -999; prevRpm = -999; prevPower = -999;
+    prevBlower = -999; prevSP = -999; prevServo = -999;
+    prevRemain = -999; prevRpmStatus = -999;
+  }
+
   DateTime now = rtc.now();
-  char timeBuf[9];
-  snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
 
   switch (page) {
-    case 0:
-      lcd.setCursor(0, 0); lcd.print("Temp  :" + String(suhuActual, 2) + "C");
-      lcd.setCursor(0, 1); lcd.print("RPM   :" + String(rpmDryer, 1));
-      lcd.setCursor(0, 2); lcd.print("Power :" + String(power, 2) + "W");
-      lcd.setCursor(0, 3); lcd.print("Jam   :" + String(timeBuf));
+    case 0: {
+      bool t = (suhuActual != prevTemp); prevTemp = suhuActual;
+      bool r = (rpmDryer != prevRpm);     prevRpm = rpmDryer;
+      bool p = (power != prevPower);      prevPower = power;
+      if (t || modeChanged) lcdLine(0, "Temp: %.2fC", suhuActual);
+      if (r || modeChanged) lcdLine(1, "RPM : %.1f", rpmDryer);
+      if (p || modeChanged) lcdLine(2, "Pwr : %.0fW", power);
+      char tbuf[9];
+      snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+      lcdLine(3, "Jam : %s", tbuf);
       break;
-
-    case 1:
-      lcd.setCursor(0, 0); lcd.print("Blower:" + String(dimmerOutActual) + "%          ");
-      lcd.setCursor(0, 1); lcd.print("SP    :" + String(setPointSuhu, 1) + "C         ");
-      lcd.setCursor(0, 2); lcd.print("Servo :" + String(posServoFixed) + " deg        ");
+    }
+    case 1: {
+      int  b = dimmerOutActual;
+      float s = setPointSuhu;
+      int  sv = posServoFixed;
+      bool bc = (b != prevBlower);  prevBlower = b;
+      bool sc = (s != prevSP);      prevSP = s;
+      bool svc = (sv != prevServo); prevServo = sv;
+      if (bc || modeChanged) lcdLine(0, "Blower: %d%%", b);
+      if (sc || modeChanged) lcdLine(1, "SP   : %.1fC", s);
+      if (svc || modeChanged) lcdLine(2, "Servo: %d deg", sv);
       if (isLogging) {
         unsigned long elapsedSec = (millis() - startLoggingTime) / 1000UL;
         unsigned long totalSec   = logDurationMinutes * 60UL;
         long remainSec           = (long)totalSec - (long)elapsedSec;
         if (remainSec < 0) remainSec = 0;
+        bool updated = (remainSec != prevRemain || modeChanged);
+        prevRemain = remainSec;
         unsigned int rmMin = remainSec / 60;
         unsigned int rmSec = remainSec % 60;
         bool blink = (remainSec < 300) ? ((millis() / 500) % 2 == 0) : true;
-        char cntBuf[21];
-        if (blink) snprintf(cntBuf, sizeof(cntBuf), "Sisa:%02d:%02d [REC]   ", rmMin, rmSec);
-        else        snprintf(cntBuf, sizeof(cntBuf), "Sisa:%02d:%02d        ", rmMin, rmSec);
-        lcd.setCursor(0, 3); lcd.print(cntBuf);
+        if (updated || !blink) {
+          char cntBuf[21];
+          snprintf(cntBuf, sizeof(cntBuf), "%02d:%02d %s", rmMin, rmSec,
+                   blink ? "[REC]" : "     ");
+          lcdLine(3, "Sisa: %s", cntBuf);
+        }
       } else {
-        lcd.setCursor(0, 3); lcd.print("Log:OFF             ");
+        lcdLine(3, "Log: OFF");
       }
       break;
-
-    case 2:
-      lcd.setCursor(0, 0);
-      lcd.print("T:" + String(suhuActual,1) + " SP:" + String(setPointSuhu,1));
-      lcd.setCursor(0, 1);
-      {
-        char buf[21];
-        snprintf(buf, sizeof(buf), "E:%.1fC E%%:%.1f%%", errorFuzzy, errorPersen);
-        lcd.print(buf);
-      }
-      lcd.setCursor(0, 2);
-      {
-        char buf[21];
-        snprintf(buf, sizeof(buf), "u:%.2f FIS:%.1f%%", u_fopid, outputFuzzy);
-        lcd.print(buf);
-      }
-      lcd.setCursor(0, 3);
-      lcd.print("Blower:" + String(dimmerOutActual) + "%          ");
+    }
+    case 2: {
+      lcdLine(0, "T:%.1f SP:%.1f", suhuActual, setPointSuhu);
+      lcdLine(1, "E:%.1fC E%%:%.1f%%", errorFuzzy, errorPersen);
+      lcdLine(2, "u:%.3f FIS:%.1f%%", u_fopid, outputFuzzy);
+      lcdLine(3, "Blower: %d%%", dimmerOutActual);
       break;
+    }
   }
 
   if (page < 2) {
-    lcd.setCursor(11, 3);
-    lcd.print(runMode == MODE_MANUAL ? "MANUAL" :
-              runMode == MODE_FUZZY  ? "FUZZY " : "NONE  ");
+    const char* ms = (curMode == MODE_MANUAL) ? "MANUAL" :
+                     (curMode == MODE_FUZZY)  ? "FUZZY"  : "NONE";
+    lcd.setCursor(13, 3);
+    lcd.print(ms);
+    lcd.print("   ");
   }
-
-  char key = getSingleKey();
+}
   if (key == 'C') {
     int maxPage = (runMode == MODE_FUZZY) ? 2 : 1;
     page = (page < maxPage) ? page + 1 : 0;
@@ -811,9 +865,9 @@ void startInputNumber(String prompt, bool isFloat, void* target, AppState return
 }
 
 void updateInputNumber() {
-  lcd.setCursor(0, 0); lcd.print(inputState.prompt);
-  lcd.setCursor(0, 1); lcd.print("Value: " + inputState.value + "        ");
-  lcd.setCursor(0, 3); lcd.print("C=OK *=.  D=Del  ");
+  lcdLine(0, "%-20.20s", inputState.prompt.c_str());
+  lcdLine(1, "Value: %-12.12s", inputState.value.c_str());
+  lcdLine(3, "C=OK *=.  D=Del  ");
 
   char key = getSingleKey();
   if (key >= '0' && key <= '9') {
@@ -840,20 +894,29 @@ void updateInputNumber() {
 }
 
 void setManualParams() {
+  static int prevIdx = -1;
+  static float prevF = -999;
+  static int prevI = -999;
   const char* labels[] = { "Set SP Suhu:  ", "Set Dimmer:   " };
   float* fValues[]     = { &setPointSuhu, nullptr };
   int*   iValues[]     = { nullptr, &dimmerOut };
   bool   isFloatArr[]  = { true, false };
   const int count = 2;
 
-  lcd.setCursor(0, 0); lcd.print(labels[manualParamIdx]);
-  lcd.setCursor(0, 1);
-  if (isFloatArr[manualParamIdx])
-    lcd.print("Cur: " + String(*fValues[manualParamIdx], 2) + "   ");
-  else
-    lcd.print("Cur: " + String(*iValues[manualParamIdx]) + "   ");
-  lcd.setCursor(0, 2); lcd.print("A:Prev B:Next      ");
-  lcd.setCursor(0, 3); lcd.print("C:Edit D:Back      ");
+  if (manualParamIdx != prevIdx) {
+    prevIdx = manualParamIdx;
+    prevF = -999; prevI = -999;
+  }
+  lcdLine(0, "%-20.20s", labels[manualParamIdx]);
+  if (isFloatArr[manualParamIdx]) {
+    float v = *fValues[manualParamIdx];
+    if (v != prevF) { prevF = v; lcdLine(1, "Cur: %.2f", v); }
+  } else {
+    int v = *iValues[manualParamIdx];
+    if (v != prevI) { prevI = v; lcdLine(1, "Cur: %d", v); }
+  }
+  lcdLine(2, "A:Prev B:Next      ");
+  lcdLine(3, "C:Edit D:Back      ");
 
   char key = getSingleKey();
   if      (key == 'A' && manualParamIdx > 0)         manualParamIdx--;
@@ -867,14 +930,18 @@ void setManualParams() {
                                                         : (void*)iValues[manualParamIdx];
     inputState.returnState = STATE_SET_MANUAL;
     appState = STATE_INPUT_NUMBER;
-    lcd.clear();
   } else if (key == 'D') {
     appState = STATE_PARAM_MENU;
-    lcd.clear();
+    prevIdx = -1;
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
   }
 }
 
 void setFuzzyParams() {
+  static int prevIdx = -1;
   const char* labels[] = {
     "Kp:", "Ki:", "Kd:", "Lambda:", "Mu:",
     "Beta:", "SetPoint:"
@@ -882,10 +949,13 @@ void setFuzzyParams() {
   float* targets[] = { &Kp, &Ki, &Kd, &lambda, &mu, &betaBlower, &setPointSuhu };
   const int count = 7;
 
-  lcd.setCursor(0, 0); lcd.print(labels[fuzzyParamIdx]);
-  lcd.setCursor(0, 1); lcd.print("Cur: " + String(*targets[fuzzyParamIdx], 4) + "   ");
-  lcd.setCursor(0, 2); lcd.print("A:Prev B:Next      ");
-  lcd.setCursor(0, 3); lcd.print("C:Edit D:Back      ");
+  if (fuzzyParamIdx != prevIdx) {
+    prevIdx = fuzzyParamIdx;
+    lcdLine(0, "%-20.20s", labels[fuzzyParamIdx]);
+    lcdLine(1, "Cur: %.4f", *targets[fuzzyParamIdx]);
+    lcdLine(2, "A:Prev B:Next      ");
+    lcdLine(3, "C:Edit D:Back      ");
+  }
 
   char key = getSingleKey();
   if      (key == 'A' && fuzzyParamIdx > 0)          fuzzyParamIdx--;
@@ -894,30 +964,37 @@ void setFuzzyParams() {
     startInputNumber(labels[fuzzyParamIdx], true, targets[fuzzyParamIdx], STATE_SET_FUZZY);
   } else if (key == 'D') {
     appState = STATE_PARAM_MENU;
-    lcd.clear();
+    prevIdx = -1;
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
   }
 }
 
 void setServoParams() {
-  lcd.setCursor(0, 0); lcd.print("Sudut Servo:");
-  lcd.setCursor(0, 1); lcd.print("Saat ini: " + String(posServoOperasi) + " deg   ");
-  lcd.setCursor(0, 2); lcd.print("                    ");
-  lcd.setCursor(0, 3); lcd.print("C:Set Sudut D:Back  ");
+  lcdLine(0, "Sudut Servo:");
+  lcdLine(1, "Saat ini: %d deg", posServoOperasi);
+  lcdLine(2, "%-20.20s", "");
+  lcdLine(3, "C:Set Sudut D:Back  ");
 
   char key = getSingleKey();
   if (key == 'C') {
     startInputNumber("Sudut Servo (0-180):", false, &posServoOperasi, STATE_SET_SERVO);
   } else if (key == 'D') {
     appState = STATE_PARAM_MENU;
-    lcd.clear();
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
   }
 }
 
 void setDurationParams() {
-  lcd.setCursor(0, 0); lcd.print("Set Duration (menit)");
-  lcd.setCursor(0, 1); lcd.print("Current: " + String(logDurationMinutes) + " mnt   ");
-  lcd.setCursor(0, 2); lcd.print("C:Edit  D:Back     ");
-  lcd.setCursor(0, 3); lcd.print("Hitungan mundur aktf");
+  lcdLine(0, "Set Duration (menit)");
+  lcdLine(1, "Current: %lu mnt", logDurationMinutes);
+  lcdLine(2, "C:Edit  D:Back     ");
+  lcdLine(3, "Hitungan mundur aktf");
 
   char key = getSingleKey();
   if (key == 'C') {
@@ -929,10 +1006,12 @@ void setDurationParams() {
     inputState.returnState = STATE_SET_DURATION;
     appState = STATE_INPUT_NUMBER;
     isDurationSet = true;
-    lcd.clear();
   } else if (key == 'D') {
     appState = STATE_PARAM_MENU;
-    lcd.clear();
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
   }
 }
 
@@ -942,10 +1021,10 @@ bool isI2CDevicePresent(uint8_t addr) {
 }
 
 void statusMessage(String line1, String line2, bool isError) {
-  lcd.clear();
-  lcd.setCursor(0, 0); lcd.print(isError ? "!!! ERROR !!!" : "[ INFO ]");
-  lcd.setCursor(0, 1); lcd.print(line1);
-  lcd.setCursor(0, 2); lcd.print(line2);
+  lcdLine(0, isError ? "!!! ERROR !!!" : "[ INFO ]");
+  lcdLine(1, "%-20.20s", line1.c_str());
+  lcdLine(2, "%-20.20s", line2.c_str());
+  lcdLine(3, "%-20.20s", "");
   delay(2000);
 }
 
@@ -1281,10 +1360,10 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
-  lcd.setCursor(0, 0); lcd.print("FoPID+Fuzzy v19     ");
-  lcd.setCursor(0, 1); lcd.print("+ Web Server        ");
-  lcd.setCursor(0, 2); lcd.print("FIS_out=[30..75]%   ");
-  lcd.setCursor(0, 3); lcd.print("Initializing...     ");
+  lcdLine(0, "FoPID+Fuzzy v19     ");
+  lcdLine(1, "+ Web Server        ");
+  lcdLine(2, "FIS_out=[30..75]%%   ");
+  lcdLine(3, "Initializing...     ");
 
   if (!keyPad.begin()) {
     Serial.println("[KP] Keypad tidak ditemukan di 0x20!");
@@ -1333,16 +1412,18 @@ void setup() {
   setupWebServer();
 
   delay(1500);
-  lcd.clear();
-  lcd.setCursor(0, 0); lcd.print("v19+WS: Ready       ");
-  lcd.setCursor(0, 1); lcd.print("SP:60C Kp:0.6 Ki:.08");
-  lcd.setCursor(0, 2); lcd.print("DMAX:85% beta:0.4   ");
-  lcd.setCursor(0, 3); lcd.print("Servo:" + String(posServoFixed) + "deg NVS:OK ");
+  lcdLine(0, "v19+WS: Ready       ");
+  lcdLine(1, "SP:60C Kp:0.6 Ki:.08");
+  lcdLine(2, "DMAX:85%% beta:0.4   ");
+  lcdLine(3, "Servo:%d deg NVS:OK", posServoFixed);
 
   Serial.printf("[SETUP] v19+WS siap. IP: %s | http://%s.local\n",
                 WiFi.localIP().toString().c_str(), HOSTNAME);
   delay(2000);
-  lcd.clear();
+  lcdLine(0, "%-20.20s", "");
+  lcdLine(1, "%-20.20s", "");
+  lcdLine(2, "%-20.20s", "");
+  lcdLine(3, "%-20.20s", "");
 }
 
 // =============================================================================
@@ -1459,15 +1540,15 @@ void loop() {
   if (runMode == MODE_FUZZY && !isLogging) {
     startLogging();
     if (isLogging) {
-      lcd.clear();
-      lcd.setCursor(0, 0); lcd.print("*** RECORD MULAI ***");
-      lcd.setCursor(0, 1); lcd.print(logFileName);
-      lcd.setCursor(0, 2); lcd.print("Durasi: ");
-      lcd.print(logDurationMinutes); lcd.print(" mnt");
-      lcd.setCursor(0, 3); lcd.print("Servo: ");
-      lcd.print(posServoFixed); lcd.print(" deg");
+      lcdLine(0, "*** RECORD MULAI ***");
+      lcdLine(1, "%-20.20s", logFileName);
+      lcdLine(2, "Durasi: %lu mnt", logDurationMinutes);
+      lcdLine(3, "Servo: %d deg", posServoFixed);
       delay(1500);
-      lcd.clear();
+      lcdLine(0, "%-20.20s", "");
+      lcdLine(1, "%-20.20s", "");
+      lcdLine(2, "%-20.20s", "");
+      lcdLine(3, "%-20.20s", "");
       Serial.printf("[AUTORECORD] Mulai: %s | %lu mnt | Servo: %d\n",
                     logFileName, logDurationMinutes, posServoFixed);
     }
@@ -1477,13 +1558,15 @@ void loop() {
   if (runMode != MODE_FUZZY && isLogging) {
     stopLogging();
     blowerFisikMati();
-    lcd.clear();
-    lcd.setCursor(0, 0); lcd.print("*** RECORD SELESAI *");
-    lcd.setCursor(0, 1); lcd.print("File tersimpan:");
-    lcd.setCursor(0, 2); lcd.print(logFileName);
-    lcd.setCursor(0, 3); lcd.print("Ambil SD card       ");
+    lcdLine(0, "*** RECORD SELESAI *");
+    lcdLine(1, "File tersimpan:");
+    lcdLine(2, "%-20.20s", logFileName);
+    lcdLine(3, "Ambil SD card       ");
     delay(2000);
-    lcd.clear();
+    lcdLine(0, "%-20.20s", "");
+    lcdLine(1, "%-20.20s", "");
+    lcdLine(2, "%-20.20s", "");
+    lcdLine(3, "%-20.20s", "");
     Serial.println("[AUTORECORD] Selesai.");
   }
 }
